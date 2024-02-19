@@ -9,7 +9,7 @@ use thiserror::Error;
 
 // Consult libwebrtc for default values here.
 pub const STUN_INITIAL_RTO_MILLIS: u64 = 250;
-pub const STUN_MAX_RETRANS: usize = 9;
+pub const STUN_MAX_RETRANS: usize = 4;
 pub const STUN_MAX_RTO_MILLIS: u64 = 3000;
 pub const STUN_TIMEOUT: Duration = Duration::from_millis(18_750); // See test for how this is calculated.
 
