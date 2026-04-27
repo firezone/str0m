@@ -1583,7 +1583,7 @@ impl IceAgent {
         // Only the controlling side sends USE-CANDIDATE.
         let use_candidate = self.controlling && pair.is_nominated();
 
-        let trans_id = pair.new_attempt(now, &self.timing_config);
+        let trans_id = pair.new_attempt(now, &self.timing_config, self.controlling);
 
         self.stats.bind_request_sent += 1;
 
