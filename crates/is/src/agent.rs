@@ -12,7 +12,7 @@ use crate::preference::default_local_preference;
 use crate::stun::{Class as StunClass, Method as StunMethod, StunTiming};
 use crate::stun::{StunMessage, StunPacket, TransId};
 use str0m_proto::{DATAGRAM_MTU, DATAGRAM_MTU_WARN, Id, Transmit};
-use str0m_proto::{NonCryptographicRng, Pii, Protocol};
+use str0m_proto::{Pii, Protocol};
 
 use crate::candidate::{Candidate, CandidateKind};
 use crate::pair::{CandidatePair, CheckState, PairId};
@@ -307,15 +307,27 @@ impl IceCreds {
 impl IceAgent {
     /// Create a new [`IceAgent`] using the default SHA1-HMAC provider.
     ///
+    /// `control_tie_breaker` is the value used in `ICE-CONTROLLING` and
+    /// `ICE-CONTROLLED` STUN attributes. Per RFC 8445 §7.3.1.1 it MUST
+    /// stay constant for the lifetime of the session, so it is a
+    /// constructor argument rather than a setter.
+    ///
     /// Available when the `sha1` feature is enabled (on by default).
     #[cfg(feature = "sha1")]
-    pub fn new(local_credentials: IceCreds) -> Self {
-        Self::with_hmac(local_credentials, &crate::DefaultSha1HmacProvider)
+    pub fn new(local_credentials: IceCreds, control_tie_breaker: u64) -> Self {
+        Self::with_hmac(
+            local_credentials,
+            control_tie_breaker,
+            &crate::DefaultSha1HmacProvider,
+        )
     }
 
     /// Create a new [`IceAgent`] with a specific SHA1-HMAC provider.
+    ///
+    /// See [`IceAgent::new`] for the semantics of `control_tie_breaker`.
     pub fn with_hmac(
         local_credentials: IceCreds,
+        control_tie_breaker: u64,
         sha1_hmac_provider: &'static dyn Sha1HmacProvider,
     ) -> Self {
         IceAgent {
@@ -326,7 +338,7 @@ impl IceAgent {
             local_credentials,
             remote_credentials: None,
             controlling: false,
-            control_tie_breaker: NonCryptographicRng::u64(),
+            control_tie_breaker,
             state: IceConnectionState::New,
             local_candidates: vec![],
             remote_candidates: vec![],
@@ -2028,7 +2040,7 @@ mod test {
     }
 
     fn new_test_agent() -> IceAgent {
-        IceAgent::new(IceCreds::new())
+        IceAgent::new(IceCreds::new(), str0m_proto::NonCryptographicRng::u64())
     }
 
     fn ipv4_1() -> SocketAddr {

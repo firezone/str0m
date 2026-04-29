@@ -30,8 +30,11 @@
 //! ```no_run
 //! use is::{IceAgent, IceCreds, Candidate};
 //!
-//! // Create an agent with random credentials.
-//! let mut agent = IceAgent::new(IceCreds::new());
+//! // Create an agent with random credentials and a session-stable
+//! // ICE-CONTROLLING / ICE-CONTROLLED tiebreaker. Per RFC 8445 §7.3.1.1
+//! // the tiebreaker MUST stay constant for the lifetime of the session.
+//! let tiebreaker: u64 = 0x1234_5678_9abc_def0;
+//! let mut agent = IceAgent::new(IceCreds::new(), tiebreaker);
 //!
 //! // Tell the agent about a local socket.
 //! let addr = "192.168.1.100:5000".parse().unwrap();
@@ -295,6 +298,35 @@ pub(crate) mod test {
                 nomination_send_count: 1,
             }
         );
+    }
+
+    // RFC 8445 §7.3.1.1: when both agents claim the controlling role, the one
+    // with the higher tiebreaker keeps it and the other yields. Both sides
+    // start as controlling here; `a2` has the higher tiebreaker, so `a1` is
+    // expected to swap to controlled and the connection still establishes.
+    #[test]
+    pub fn role_conflict_higher_tiebreaker_wins() {
+        let mut a1 = TestAgent::with_tie_breaker(info_span!("L"), 1);
+        let mut a2 = TestAgent::with_tie_breaker(info_span!("R"), 2);
+
+        let c1 = a1.add_host_candidate("1.1.1.1:1000");
+        a2.add_remote_candidate(c1);
+
+        let c2 = a2.add_host_candidate("2.2.2.2:1000");
+        a1.add_remote_candidate(c2);
+
+        a1.set_controlling(true);
+        a2.set_controlling(true);
+
+        loop {
+            if a1.state().is_connected() && a2.state().is_connected() {
+                break;
+            }
+            progress(&mut a1, &mut a2);
+        }
+
+        assert!(!a1.controlling(), "lower-tiebreaker side must yield");
+        assert!(a2.controlling(), "higher-tiebreaker side must keep role");
     }
 
     // str0m performs calculations on `now` internally
@@ -1254,10 +1286,14 @@ pub(crate) mod test {
 
     impl TestAgent {
         pub fn new(span: Span) -> Self {
+            Self::with_tie_breaker(span, str0m_proto::NonCryptographicRng::u64())
+        }
+
+        pub fn with_tie_breaker(span: Span, control_tie_breaker: u64) -> Self {
             let now = Instant::now();
             TestAgent {
                 start_time: now,
-                agent: IceAgent::new(IceCreds::new()),
+                agent: IceAgent::new(IceCreds::new(), control_tie_breaker),
                 span,
                 events: vec![],
                 progress_count: 0,

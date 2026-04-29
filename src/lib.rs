@@ -1119,7 +1119,11 @@ impl Rtc {
         let session = Session::new(&config);
 
         let local_creds = config.local_ice_credentials.unwrap_or_else(IceCreds::new);
-        let mut ice = IceAgent::with_hmac(local_creds, crypto_provider.sha1_hmac_provider);
+        let mut ice = IceAgent::with_hmac(
+            local_creds,
+            str0m_proto::NonCryptographicRng::u64(),
+            crypto_provider.sha1_hmac_provider,
+        );
         if config.ice_lite {
             ice.set_ice_lite(config.ice_lite);
         }
